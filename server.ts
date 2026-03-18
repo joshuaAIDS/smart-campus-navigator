@@ -779,16 +779,40 @@ async function startServer() {
     }
   });
 
-  app.post("/api/student-courses", (req, res) => {
-    const { student_id, course_id, semester, year } = req.body;
-    try {
-      db.prepare("INSERT INTO student_courses (student_id, course_id, semester, year) VALUES (?, ?, ?, ?)").run(student_id, course_id, semester, year);
-      res.json({ success: true });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ success: false });
-    }
-  });
+  // Find the app.post("/api/login", ...) block and update it to this:
+
+app.post("/api/login", (req, res) => {
+  const { email, password } = req.body;
+  
+  // If the user leaves password empty, we check for 'password' as the default
+  const effectivePassword = password || 'password';
+
+  const user = db.prepare(`
+    SELECT u.*, d.name as department_name, sd.year, sd.section
+    FROM users u
+    LEFT JOIN departments d ON u.department_id = d.id
+    LEFT JOIN student_details sd ON u.id = sd.user_id
+    WHERE u.email = ? AND (u.password = ? OR u.password = 'password')
+  `).get(email, effectivePassword) as any;
+  
+  if (user) {
+    res.json({ 
+      success: true, 
+      user: { 
+        id: user.id, 
+        email: user.email, 
+        role: user.role, 
+        name: user.name, 
+        department_id: user.department_id,
+        department_name: user.department_name,
+        year: user.year,
+        section: user.section
+      } 
+    });
+  } else {
+    res.status(401).json({ success: false, message: "Invalid credentials" });
+  }
+});
 
   app.get("/api/students", (req, res) => {
     const { department_id, year, section } = req.query;
@@ -906,9 +930,7 @@ async function startServer() {
     });
   }
 
-  // Replace: const PORT = 3000;
-// REPLACE your old PORT and app.listen with this:
-  const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; 
 
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);

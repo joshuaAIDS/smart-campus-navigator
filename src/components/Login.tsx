@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
+import { auth, db } from '../lib/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { GraduationCap, Lock, Mail, Loader2, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -20,19 +23,35 @@ export default function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-     const response = await fetch('https://smart-campus-navigator-crg8.onrender.com/api/login', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email, password }),
-});
-      const data = await response.json();
-      if (data.success) {
-        onLogin(data.user);
+      // 1. Sign in with Firebase Auth 
+      // Note: Firebase usually requires a password. If your Firebase users 
+      // have no password, ensure your Firebase settings allow it or use 
+      // a placeholder 'password' if the field is empty.
+      const loginPassword = password || 'password'; 
+      
+      const userCredential = await signInWithEmailAndPassword(auth, email, loginPassword);
+      const fbUser = userCredential.user;
+
+      // 2. Fetch the specific User Role from Firestore
+      const userDocSnap = await getDoc(doc(db, 'users', fbUser.uid));
+
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        
+        onLogin({
+          id: fbUser.uid as any,
+          email: fbUser.email || '',
+          name: userData.name || fbUser.displayName || email.split('@')[0],
+          role: userData.role || 'student', 
+          department_id: userData.department_id || 1,
+          department_name: userData.department_name || 'General'
+        });
       } else {
-        setError(data.message || 'Login failed');
+        setError("User profile not found in database.");
       }
-    } catch (err) {
-      setError('Something went wrong. Please try again.');
+
+    } catch (err: any) {
+      setError('Login failed. Please check your email.');
     } finally {
       setLoading(false);
     }
@@ -54,25 +73,14 @@ export default function Login({ onLogin }: LoginProps) {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-md w-full bg-white rounded-2xl shadow-xl shadow-slate-200/50 p-8 border border-slate-100"
+        className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-100"
       >
         <div className="flex flex-col items-center mb-8">
-          <img 
-            src="/logo.png" 
-            alt="Smart Campus Navigator" 
-            className="h-20 w-auto object-contain mb-4"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-            }}
-          />
-          <div className="hidden flex flex-col items-center">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-200">
-              <GraduationCap className="w-10 h-10 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-900 text-center">Smart Campus<br/><span className="text-indigo-600">Navigator</span></h1>
+          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-4">
+            <GraduationCap className="w-10 h-10 text-white" />
           </div>
-          <p className="text-slate-500 text-sm mt-1">Sign in to your account</p>
+          <h1 className="text-2xl font-bold text-slate-900 text-center">Smart Campus Navigator</h1>
+          <p className="text-slate-500 text-sm mt-1">Sign in with Email Only</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -85,83 +93,44 @@ export default function Login({ onLogin }: LoginProps) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                placeholder="name@college.edu"
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
+                placeholder="user@college.edu"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Password (Optional)</label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input
                 type={showPassword ? "text" : "password"}
-                required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
-                placeholder="••••••••"
+                className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
+                placeholder="Leave empty for default"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
             </div>
           </div>
 
-          {error && (
-            <motion.p 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-red-500 text-sm text-center font-medium"
-            >
-              {error}
-            </motion.p>
-          )}
+          {error && <p className="text-red-500 text-sm text-center font-medium">{error}</p>}
 
-          <div className="space-y-3">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 disabled:opacity-70"
-            >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleVisitorLogin}
-              className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-            >
-              Visitor
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
+          </button>
+          
+          <button
+            type="button"
+            onClick={handleVisitorLogin}
+            className="w-full mt-4 bg-white border-2 border-slate-200 text-slate-700 font-semibold py-3 rounded-xl"
+          >
+            Guest Visitor
+          </button>
         </form>
-
-        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-          <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold">
-            Demo Credentials
-          </p>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
-            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-              <p className="text-indigo-600 font-bold">Faculty</p>
-              <p className="text-slate-500">faculty@college.edu</p>
-            </div>
-            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-              <p className="text-indigo-600 font-bold">Student</p>
-              <p className="text-slate-500">student@college.edu</p>
-            </div>
-            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-              <p className="text-indigo-600 font-bold">Admin</p>
-              <p className="text-slate-500">admin@college.edu</p>
-            </div>
-          </div>
-          <p className="mt-2 text-[10px] text-slate-400 italic">Password: password</p>
-        </div>
       </motion.div>
     </div>
   );
