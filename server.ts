@@ -4,6 +4,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
+import cors from "cors";
 import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -904,10 +905,12 @@ async function startServer() {
     });
   }
 
-  const PORT = 3000;
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  // Replace: const PORT = 3000;
+const PORT = parseInt(process.env.PORT || "3000", 10);
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
 }
 
 startServer();
