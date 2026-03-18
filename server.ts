@@ -240,6 +240,7 @@ if (userCount.count === 0) {
 
 async function startServer() {
   const app = express();
+  app.use(cors());
   app.use(express.json());
 
   // API Routes
@@ -906,11 +907,12 @@ async function startServer() {
   }
 
   // Replace: const PORT = 3000;
-const PORT = parseInt(process.env.PORT || "3000", 10);
+// REPLACE your old PORT and app.listen with this:
+  const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
-});
-}
+  app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+} // This is the end of startServer
 
 startServer();
